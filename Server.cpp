@@ -189,10 +189,10 @@ void Server::ListenLoop()
 		//TODO improve recv loop, doesn't always get req
 		while (recvBytes < PACKET_SIZE && retries < MAX_RETRIES)
 		{
-			if(Readable(&acceptSocket))
+			if (Readable(&acceptSocket))
 			{
 				int thisRecv = recv(acceptSocket, recvBuf, PACKET_SIZE, 0);
-				if(thisRecv == 0 || thisRecv == SOCKET_ERROR)
+				if (thisRecv == 0 || thisRecv == SOCKET_ERROR)
 				{
 					break;
 				}
@@ -204,7 +204,7 @@ void Server::ListenLoop()
 			}
 		}
 
-		if (strlen(recvBuf) == 0) //Something went wrong
+		if (retries >= MAX_RETRIES) //Something went wrong
 		{
 			closesocket(acceptSocket);
 			continue;
@@ -260,17 +260,17 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 					if (GetFile(fileName, htmlFile, len))
 					{
 						GetHeader(ResponseCodes::OK, headerBuf, len);
-						if(len > 0) //Don't bother sending an empty file
+						if (len > 0) //Don't bother sending an empty file
 						{
-							int totalSize = len + strlen(headerBuf);
+							int totalSize = 1 + len + strlen(headerBuf);
 							char* resp = (char*)malloc(totalSize);
-							if(resp)
+							if (resp)
 							{
 								memset(resp, 0, totalSize);
-								
+
 								memcpy(&resp[0], headerBuf, strlen(headerBuf));
 								memcpy(&resp[strlen(headerBuf)], htmlFile, strlen(htmlFile));
-												
+
 								SendBuffer(resp, socket);
 
 								free(resp);
@@ -299,7 +299,7 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 
 void Server::GetHeader(ResponseCodes code, char* buf, int len, const char* loc)
 {
-	if (!buf) 
+	if (!buf)
 	{
 		return;
 	}
@@ -324,7 +324,7 @@ void Server::GetHeader(ResponseCodes code, char* buf, int len, const char* loc)
 	//TODO clean this up
 	char tempBuf[200];
 	memset(tempBuf, 0, 200);
-	if(loc)
+	if (loc)
 	{
 		sprintf_s(buf, 200, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\nLocation:%s\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, CONTENT_TYPE, len, loc);
 	}
@@ -335,7 +335,7 @@ void Server::GetHeader(ResponseCodes code, char* buf, int len, const char* loc)
 	memcpy(buf, tempBuf, strlen(tempBuf));
 }
 
-bool Server::GetFile(char* name, char* retBuf, int &len)
+bool Server::GetFile(char* name, char* retBuf, int& len)
 {
 	char nameBuf[200];
 	sprintf_s(nameBuf, ".%s.html", name);
@@ -361,20 +361,17 @@ bool Server::GetFile(char* name, char* retBuf, int &len)
 
 void Server::SendBuffer(char* buf, SOCKET* dest)
 {
-	if(!buf)
+	if (!buf)
 	{
 		return;
 	}
 
-	int sentBytes = 0;
-	while (sentBytes < strlen(buf))
+	if (Writable(dest))
 	{
-		int thisSent = send(*dest, buf, strlen(buf), 0);
-		if (thisSent == SOCKET_ERROR)
+		int sentBytes = send(*dest, buf, strlen(buf), 0);
+	/*	if (sentBytes == SOCKET_ERROR)
 		{
-			break;
-		}
-		sentBytes += thisSent;
+		}*/
 	}
 }
 
