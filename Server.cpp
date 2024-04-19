@@ -71,7 +71,6 @@ void Server::Init(const char* ip, int port)
 	}
 
 	listenThread = std::thread(&Server::ListenLoop, this);
-
 }
 
 void Server::SetNonBlocking(SOCKET* socket)
@@ -146,19 +145,11 @@ bool Server::Writable(SOCKET* socket)
 		return false;
 	}
 	static timeval dontBlock = { 0,0 };
-
 	fd_set wfd;
 	FD_ZERO(&wfd);
 	FD_SET(*socket, &wfd);
-
 	int ret = select(0, NULL, &wfd, NULL, &dontBlock);
-
-	if (ret == SOCKET_ERROR || ret == 0)
-	{
-		return false;
-	}
-
-	return true;
+	return ret != SOCKET_ERROR && ret > 0;
 }
 
 void Server::ListenLoop()
@@ -249,9 +240,11 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 
 	if (!strncmp(&data[0], "GET", 3))
 	{
-		if (!strncmp(&data[4], " ", 1)) //No site requested, send index.html
+		char temp = *&data[5];
+		if (isspace(temp)) //No site requested, redirect to index
 		{
-
+			GetHeader(ResponseCodes::TEMP_REDIRECT, headerBuf, 0, "/index.html");
+			SendBuffer(headerBuf, socket);
 		}
 		else
 		{
@@ -304,7 +297,7 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 	closesocket(*socket);
 }
 
-void Server::GetHeader(ResponseCodes code, char* buf, int len)
+void Server::GetHeader(ResponseCodes code, char* buf, int len, const char* loc)
 {
 	if (!buf) 
 	{
@@ -331,7 +324,14 @@ void Server::GetHeader(ResponseCodes code, char* buf, int len)
 	//TODO clean this up
 	char tempBuf[200];
 	memset(tempBuf, 0, 200);
-	sprintf_s(buf, 200, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, CONTENT_TYPE, len);
+	if(loc)
+	{
+		sprintf_s(buf, 200, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\nLocation:%s\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, CONTENT_TYPE, len, loc);
+	}
+	else
+	{
+		sprintf_s(buf, 200, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, CONTENT_TYPE, len);
+	}
 	memcpy(buf, tempBuf, strlen(tempBuf));
 }
 

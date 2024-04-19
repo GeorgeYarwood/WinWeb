@@ -5,7 +5,7 @@
 int main()
 {
 	Server* newServer = new Server();
-	newServer->Init("ANY", 8888);
+	newServer->Init("ANY", 80);
 
 	while (newServer->servState != State::SHUTDOWN)
 	{

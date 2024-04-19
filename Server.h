@@ -37,7 +37,8 @@ enum ResponseCodes
 	INTERNAL_SERVER_ERROR = 500,
 	NOT_IMPLEMENTED = 501,
 	HTTP_VER_NOT_SUPPORTED = 503,
-	NOT_FOUND = 404
+	NOT_FOUND = 404,
+	TEMP_REDIRECT = 302
 };
 
 class Server
@@ -52,7 +53,7 @@ private:
 	bool Writable(SOCKET* socket);
 	void SetNonBlocking(SOCKET* socket);
 	void ProcessRequest(SOCKET* socket, char* data);
-	void GetHeader(ResponseCodes code, char* buf, int len);
+	void GetHeader(ResponseCodes code, char* buf, int len, const char* loc = nullptr);
 	bool GetFile(char* name, char* retBuf, int &len);
 	void SendBuffer(char* buf, SOCKET* dest);
 	std::thread listenThread;
