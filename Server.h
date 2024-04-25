@@ -3,13 +3,12 @@
 #include <thread>
 #include <functional>
 
-#define MAX_FILE_SIZE 1000
+#define MAX_FILE_SIZE 99999999999999999
 #define PACKET_SIZE 200
 #define SERVER_NAME "WinWeb"
 #define SERVER_MAJOR 0
 #define SERVER_MINOR 2
 #define HTTP_VER "HTTP/1.1"
-#define CONTENT_TYPE "text/html"
 #define START_YEAR 1900
 #define MAX_RETRIES 10
 enum ShutdownReason 
@@ -54,11 +53,11 @@ private:
 	bool Writable(SOCKET* socket);
 	void SetNonBlocking(SOCKET* socket);
 	void ProcessRequest(SOCKET* socket, char* data);
-	void GetHeader(ResponseCodes code, char* buf, int len, const char* loc = nullptr);
-	bool GetFile(char* name, char* retBuf, int &len);
-	void SendBuffer(char* buf, SOCKET* dest);
+	void GetHeader(ResponseCodes code, char* buf, int len, const char* loc = nullptr, char* contentType = nullptr);
+	bool GetFile(char* name, char* ext, char* &retBuf, int &len);
+	void SendBuffer(char* buf, SOCKET* dest, int size = -1);
+	char* GetTypeFromExtension(char* ext);
 	std::thread listenThread;
-
 	std::function<void(SOCKET*, char*)> recvFunc;
 	std::function<bool(SOCKET*)> readableFunc;
 	std::function<bool(SOCKET*)> writableFunc;

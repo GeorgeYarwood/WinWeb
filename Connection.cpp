@@ -31,6 +31,7 @@ void Connection::RunConnection()
 		{
 			if (!RecvFromSocket(recvBuf)) 
 			{
+				//TODO handle keep-alive req
 				OnDisconnect();
 				return;
 			}
@@ -38,7 +39,7 @@ void Connection::RunConnection()
 			OnRecv(&socket, recvBuf);
 		}
 
-		std::this_thread::sleep_for(std::chrono::microseconds(200));
+		std::this_thread::sleep_for(std::chrono::microseconds(500));
 	}
 }
 

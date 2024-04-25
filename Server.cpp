@@ -189,23 +189,25 @@ void Server::ListenLoop()
 
 	while (servState == State::RUNNING)
 	{
-		if (!Readable(&servSocket))
+		if (Readable(&servSocket))
 		{
-			continue;
+			acceptSocket = accept(servSocket, (SOCKADDR*)&acceptInfo, &acceptSize);
+
+			if (acceptSocket == INVALID_SOCKET)
+			{
+				continue;
+			}
+
+			SetNonBlocking(&acceptSocket);
+
+			Connection* newCon = new Connection(acceptSocket, acceptInfo, recvFunc, readableFunc, writableFunc);
+
+			char logBuf[200];
+			sprintf_s(logBuf, "Accepted connection from %s", newCon->ip);
+			PrintToLog(logBuf);
 		}
 
-		acceptSocket = accept(servSocket, (SOCKADDR*)&acceptInfo, &acceptSize);
-
-		if (acceptSocket == INVALID_SOCKET)
-		{
-			continue;
-		}
-
-		SetNonBlocking(&acceptSocket);
-
-		Connection* newCon = new Connection(acceptSocket, acceptInfo, recvFunc, readableFunc, writableFunc);
-
-		std::cout << "Accepted connection from " << newCon->ip << std::endl;
+		std::this_thread::sleep_for(std::chrono::microseconds(500));
 	}
 
 	ShutdownInternal(ShutdownReason::NONE);
@@ -245,19 +247,25 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 		else
 		{
 			char* fileNameEnd = strchr(&data[4], '.');
+			char* fileExt = strchr(fileNameEnd, ' ');
 			if (fileNameEnd)
 			{
 				char fileName[150];
 				CopyRange(&data[4], fileNameEnd, fileName, 150);
-				char* htmlFile = (char*)malloc(MAX_FILE_SIZE);
-				if (htmlFile)
+				char ext[150];
+				CopyRange(fileNameEnd, fileExt, ext, 150);
+
+				char* file = nullptr;
+				int len = 0;
+				if (GetFile(fileName, ext, file, len))
 				{
-					int len = 0;
-					if (GetFile(fileName, htmlFile, len))
+					if (file && len > 0) //Don't bother sending an empty file
 					{
-						GetHeader(ResponseCodes::OK, headerBuf, len);
-						if (len > 0) //Don't bother sending an empty file
+						char* contentType = GetTypeFromExtension(ext);
+						if (contentType)
 						{
+							GetHeader(ResponseCodes::OK, headerBuf, len, nullptr, contentType);
+
 							int totalSize = 1 + len + strlen(headerBuf);
 							char* resp = (char*)malloc(totalSize);
 							if (resp)
@@ -265,20 +273,23 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 								memset(resp, 0, totalSize);
 
 								memcpy(&resp[0], headerBuf, strlen(headerBuf));
-								memcpy(&resp[strlen(headerBuf)], htmlFile, strlen(htmlFile));
+								memcpy(&resp[strlen(headerBuf)], file, len);
 
-								SendBuffer(resp, socket);
+								SendBuffer(resp, socket, totalSize);
 
 								free(resp);
 							}
+
+							free(contentType);
 						}
+
+						free(file);
 					}
 					else
 					{
 						GetHeader(ResponseCodes::NOT_FOUND, headerBuf, 0);
 						SendBuffer(headerBuf, socket);
 					}
-					free(htmlFile);
 				}
 			}
 		}
@@ -288,18 +299,22 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 		GetHeader(ResponseCodes::NOT_IMPLEMENTED, headerBuf, 0);
 		SendBuffer(headerBuf, socket);
 	}
-
-	GetHeader(ResponseCodes::ACCEPTED, headerBuf, 0);
-	SendBuffer(headerBuf, socket);
-
-	closesocket(*socket);
 }
 
-void Server::GetHeader(ResponseCodes code, char* buf, int len, const char* loc)
+
+void Server::GetHeader(ResponseCodes code, char* buf, int len, const char* loc, char* contentType)
 {
 	if (!buf)
 	{
 		return;
+	}
+
+	bool cleanup = false;
+	char* getContentType = contentType;
+	if (!getContentType)
+	{
+		cleanup = true;
+		getContentType = GetTypeFromExtension((char*)".html");
 	}
 
 	struct tm lTm;
@@ -320,55 +335,187 @@ void Server::GetHeader(ResponseCodes code, char* buf, int len, const char* loc)
 	strncpy_s(monStr, &timeBuf[4], 3);
 
 	//TODO clean this up
-	char tempBuf[200];
-	memset(tempBuf, 0, 200);
+	char tempBuf[300];
+	memset(tempBuf, 0, 300);
 	if (loc)
 	{
-		sprintf_s(buf, 200, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\nLocation:%s\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, CONTENT_TYPE, len, loc);
+		sprintf_s(buf, 300, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\nLocation:%s\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, getContentType, len, loc);
 	}
 	else
 	{
-		sprintf_s(buf, 200, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, CONTENT_TYPE, len);
+		sprintf_s(buf, 300, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, getContentType, len);
 	}
 
 	tempBuf[strlen(tempBuf)] = 0;
 	memcpy(buf, tempBuf, strlen(tempBuf));
+
+	if (cleanup)
+	{
+		free(getContentType);
+	}
 }
 
-bool Server::GetFile(char* name, char* retBuf, int& len)
+bool Server::GetFile(char* name, char* ext, char*& retBuf, int& len)
 {
+	//Finds file in the current directory, dynamically allocates a buffer and then returns true when completed sucessfully
 	char nameBuf[200];
-	sprintf_s(nameBuf, ".%s.html", name);
-	std::ifstream htmlFile(nameBuf);
-	if (!htmlFile.is_open())
+	sprintf_s(nameBuf, ".%s%s\0", name, ext);
+	std::ifstream file(nameBuf, std::ios::binary | std::ios::ate);
+	if (!file.is_open())
 	{
 		return false;
 	}
 
-	std::string wholeFile;
-	std::string line;
-	while (std::getline(htmlFile, line))
+	len = file.tellg();
+	if (len > MAX_FILE_SIZE)
 	{
-		wholeFile += line;
+		return false;
 	}
 
-	len = wholeFile.size();
-	memcpy(retBuf, wholeFile.c_str(), len);
-	retBuf[len] = 0;
-	htmlFile.close();
+	retBuf = (char*)malloc(len);
+
+	if (!retBuf)
+	{
+		return false;
+	}
+
+	file.seekg(0, std::ios::beg);
+	file.read(retBuf, len);
+	file.close();
 	return true;
 }
 
-void Server::SendBuffer(char* buf, SOCKET* dest)
+void Server::SendBuffer(char* buf, SOCKET* dest, int size)
 {
 	if (!buf)
 	{
 		return;
 	}
 
+	int sendAmount = size;
+
+	if (sendAmount == -1) //If we're sending binary data we can't rely on strlen, so default to it but let us override if when needed
+	{
+		sendAmount = strlen(buf);
+	}
+
 	if (Writable(dest))
 	{
-		send(*dest, buf, strlen(buf), 0);
+		//Not sure if this is required for send?
+		int sentBytes = 0;
+		while (sentBytes < sendAmount)
+		{
+			int thisSentBytes = send(*dest, buf, sendAmount, 0);
+			if (thisSentBytes == 0) 
+			{
+				return;
+			}
+			else
+			{
+				sentBytes += thisSentBytes;
+			}
+		}
 	}
+}
+
+char* Server::GetTypeFromExtension(char* ext)
+{
+	int max = strlen(ext);
+	char* lowerExt = (char*)malloc(max + 1);
+	char* it = ext;
+	for (int i = 0; i < max; i++)
+	{
+		char low = (char)tolower(*it);
+		memcpy(&lowerExt[i], &low, 1);
+		++it;
+	}
+	
+	lowerExt[max] = 0;
+	char* retbuf = (char*)malloc(50);
+	if (!retbuf)
+	{
+		return nullptr;
+	}
+
+	memset(retbuf, 0, 50);
+
+	//Website content
+	if (!strcmp(lowerExt, ".html") || !strcmp(lowerExt, ".htm"))
+	{
+		strcpy(retbuf, "text/html");
+	}
+	else if (!strcmp(lowerExt, ".js") || !strcmp(lowerExt, ".mjs"))
+	{
+		strcpy(retbuf, "application/javascript");
+	}
+	else if (!strcmp(lowerExt, ".css"))
+	{
+		strcpy(retbuf, "text/css");
+	}
+
+	//Media
+	else if (!strcmp(lowerExt, ".jpg") || !strcmp(lowerExt, ".jpeg"))
+	{
+		strcpy(retbuf, "image/jpg");
+	}
+	else if (!strcmp(lowerExt, ".png"))
+	{
+		strcpy(retbuf, "image/png");
+	}
+	else if (!strcmp(lowerExt, ".webp"))
+	{
+		strcpy(retbuf, "image/webp");
+	}
+	else if (!strcmp(lowerExt, ".gif"))
+	{
+		strcpy(retbuf, "image/gif");
+	}
+	else if (!strcmp(lowerExt, ".mp3"))
+	{
+		strcpy(retbuf, "audio/mpeg");
+	}
+	else if (!strcmp(lowerExt, ".mp4"))
+	{
+		strcpy(retbuf, "video/mp4");
+	}
+	else if (!strcmp(lowerExt, ".mpeg"))
+	{
+		strcpy(retbuf, "video/mpeg");
+	}
+
+	//Text/documents
+	else if (!strcmp(lowerExt, ".txt"))
+	{
+		strcpy(retbuf, "text/plain");
+	}
+	else if (!strcmp(lowerExt, ".doc"))
+	{
+		strcpy(retbuf, "application/msword");
+	}
+	else if (!strcmp(lowerExt, ".doc"))
+	{
+		strcpy(retbuf, "application/msword");
+	}
+
+	//Archives
+	else if (!strcmp(lowerExt, ".zip"))
+	{
+		strcpy(retbuf, "application/zip");
+	}
+	else if (!strcmp(lowerExt, ".7z"))
+	{
+		strcpy(retbuf, "application/x-7z-compressed");
+	}
+
+	//Misc/default
+	else
+	{
+		//Default to binary stream
+		strcpy(retbuf, "application/octet-stream");
+	}
+
+	free(lowerExt);
+	return retbuf;
+
 }
 
