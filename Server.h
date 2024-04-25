@@ -7,7 +7,7 @@
 #define PACKET_SIZE 200
 #define SERVER_NAME "WinWeb"
 #define SERVER_MAJOR 0
-#define SERVER_MINOR 1
+#define SERVER_MINOR 2
 #define HTTP_VER "HTTP/1.1"
 #define CONTENT_TYPE "text/html"
 #define START_YEAR 1900
