@@ -1,6 +1,7 @@
 #pragma once
 #include <WinSock2.h>
 #include <thread>
+#include <functional>
 
 #define MAX_FILE_SIZE 1000
 #define PACKET_SIZE 200
@@ -10,7 +11,7 @@
 #define HTTP_VER "HTTP/1.1"
 #define CONTENT_TYPE "text/html"
 #define START_YEAR 1900
-#define MAX_RETRIES 200
+#define MAX_RETRIES 10
 enum ShutdownReason 
 {
 	DLL_ERR,
@@ -57,6 +58,11 @@ private:
 	bool GetFile(char* name, char* retBuf, int &len);
 	void SendBuffer(char* buf, SOCKET* dest);
 	std::thread listenThread;
+
+	std::function<void(SOCKET*, char*)> recvFunc;
+	std::function<bool(SOCKET*)> readableFunc;
+	std::function<bool(SOCKET*)> writableFunc;
+
 public:
 	Server();
 	~Server();

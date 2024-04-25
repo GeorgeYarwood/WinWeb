@@ -3,6 +3,9 @@
 #include <ws2tcpip.h>
 #include <fstream>
 #include <string>
+#include <thread>
+#include <chrono>
+#include "Connection.h"
 
 Server::Server()
 {
@@ -10,7 +13,6 @@ Server::Server()
 
 Server::~Server()
 {
-
 }
 
 void Server::Init(const char* ip, int port)
@@ -69,6 +71,24 @@ void Server::Init(const char* ip, int port)
 	{
 		return;
 	}
+
+	recvFunc = [this](SOCKET* sckt, char* data)
+		{
+			ProcessRequest(sckt, data);
+		};
+
+
+	readableFunc = [this](SOCKET* sckt)
+		{
+			return Readable(sckt);
+		};
+
+
+	writableFunc = [this](SOCKET* sckt)
+		{
+			return Writable(sckt);
+		};
+
 
 	listenThread = std::thread(&Server::ListenLoop, this);
 }
@@ -183,34 +203,9 @@ void Server::ListenLoop()
 
 		SetNonBlocking(&acceptSocket);
 
-		char recvBuf[PACKET_SIZE];
-		int recvBytes = 0;
-		int retries = 0;
-		//TODO improve recv loop, doesn't always get req
-		while (recvBytes < PACKET_SIZE && retries < MAX_RETRIES)
-		{
-			if (Readable(&acceptSocket))
-			{
-				int thisRecv = recv(acceptSocket, recvBuf, PACKET_SIZE, 0);
-				if (thisRecv == 0 || thisRecv == SOCKET_ERROR)
-				{
-					break;
-				}
-				recvBytes += thisRecv;
-			}
-			else
-			{
-				retries++;
-			}
-		}
+		Connection* newCon = new Connection(acceptSocket, acceptInfo, recvFunc, readableFunc, writableFunc);
 
-		if (retries >= MAX_RETRIES) //Something went wrong
-		{
-			closesocket(acceptSocket);
-			continue;
-		}
-
-		ProcessRequest(&acceptSocket, recvBuf);
+		std::cout << "Accepted connection from " << newCon->ip << std::endl;
 	}
 
 	ShutdownInternal(ShutdownReason::NONE);
@@ -235,6 +230,7 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 	}
 
 	char headerBuf[300];
+
 	GetHeader(ResponseCodes::PROCESSING, headerBuf, 0);
 	SendBuffer(headerBuf, socket);
 
@@ -289,10 +285,12 @@ void Server::ProcessRequest(SOCKET* socket, char* data)
 	}
 	else
 	{
-		//Send NOT_IMPLEMENTED
 		GetHeader(ResponseCodes::NOT_IMPLEMENTED, headerBuf, 0);
 		SendBuffer(headerBuf, socket);
 	}
+
+	GetHeader(ResponseCodes::ACCEPTED, headerBuf, 0);
+	SendBuffer(headerBuf, socket);
 
 	closesocket(*socket);
 }
@@ -368,10 +366,7 @@ void Server::SendBuffer(char* buf, SOCKET* dest)
 
 	if (Writable(dest))
 	{
-		int sentBytes = send(*dest, buf, strlen(buf), 0);
-	/*	if (sentBytes == SOCKET_ERROR)
-		{
-		}*/
+		send(*dest, buf, strlen(buf), 0);
 	}
 }
 
