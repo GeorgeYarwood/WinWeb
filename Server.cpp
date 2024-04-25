@@ -330,6 +330,8 @@ void Server::GetHeader(ResponseCodes code, char* buf, int len, const char* loc)
 	{
 		sprintf_s(buf, 200, "%s %i \r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, CONTENT_TYPE, len);
 	}
+
+	tempBuf[strlen(tempBuf)] = 0;
 	memcpy(buf, tempBuf, strlen(tempBuf));
 }
 

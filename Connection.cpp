@@ -16,7 +16,6 @@ Connection::Connection(SOCKET sckt, sockaddr_in info, std::function<void(SOCKET*
 
 Connection::~Connection()
 {
-	OnDisconnect();
 }
 
 void Connection::RunConnection()
