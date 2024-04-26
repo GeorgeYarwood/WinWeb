@@ -1,13 +1,14 @@
 #include <iostream>
 #include "Server.h"
 #include <chrono>
+#include "Common.h"
 
 int main()
 {
 	Server* newServer = new Server();
 	newServer->Init("ANY", 80);
 
-	std::cout << "WinWeb 0.2a, listening for connections..." << std::endl;
+	std::cout << "WinWeb " << SERVER_MAJOR << "." << SERVER_MINOR << "a, listening for connections..." << std::endl;
 
 	while (newServer->servState != State::SHUTDOWN)
 	{

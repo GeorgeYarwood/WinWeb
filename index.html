@@ -1,14 +1,53 @@
 <!DOCTYPE html>
 <html>
-<body>
+<body style="background-color:#808080;">
 
-<h1>Welcome!</h1>
+<h1 style = "background-color:rgb(255, 99, 71);">Welcome!</h1>
 
-<p>This website is a platform for my hobbiest projects. The main thing I wish to distribute here are smaller projects and tools which I think people will find useful.</p>
-<p>If you know me from anywhere else you'll also know that I work in game development and create games in my spare time, which I will also link here.</p>
+<p style="color:white;">This website is a platform for my hobbiest projects. The main thing I wish to distribute here are smaller projects and tools which I think people will find useful.</p>
+<p style="color:white;">My main Website/portfolio can be viewed <a href="https://georgeyarwood.com/">here.</a></p>
+<p style="color:white;">If you know me from anywhere else you'll also know that I work in game dev and create games in my spare time, which I will also link here.</p>
 
-<p>The server powering this website is of my own creation, called WinWeb. It's a simple HTTP server using WinSock that can be downloaded from here.</p>
+<p style="color:white;">The server powering this website is of my own creation, called WinWeb. It's a simple HTTP server written in C++ using WinSock that can be downloaded below.</p>
+<p style="color:white;">You may also view the source code on <a href="https://github.com/GeorgeYarwood/WinWeb">Github.</a></p>
 
+<h1 style = "background-color:rgb(255, 99, 71);">WinWeb</h1>
+<img src="./WinWeb.PNG" alt="WinWeb entry point" style="float:right;width:450px;height:120px;"></img>
+<p style="color:white;">A simple HTTP web server</p>
+<p style="color:white;">Features:</p>
+
+ <ul>
+  <li style="color:white;">Supports HTTP 1.1</li>
+  <li style="color:white;">Only uses around 1mb of RAM</li>
+  <li style="color:white;">Threaded connections to support multiple clients</li>
+  <li style="color:white;">Support for most common MIME types (content delivery)</li>
+  <li style="color:white;">Simple and lightweight, only 62Kb!</li>
+</ul> 
+
+<p style="color:white;"><a href="./WinWeb.exe">Download</a></p>
+
+<h1 style = "background-color:rgb(255, 99, 71);">Games</h1>
+<p style="color:white;">I have released a handful of games on the <a href="https://play.google.com/store/apps/dev?id=4861772112004311941">Google Play Store</a>, as well as on <a href="https://triphzrd.itch.io/">Itch.io</a>.</p>
+<p style="color:white;">My most recent project has been <a href="https://play.google.com/store/apps/details?id=com.triphazard.bowlingmaster">Bowling Master</a></p>
+<p style="color:white;">It's a peer-to-peer, networked bowling game made using Unity Netcode for GameObjects. To get around NAT/firewalls I made use of Unity Relay. On it's own Relay is a very manual system
+requring the host to send a generated code to the client, which they then enter and connect with. I was able to automate this process by creating a server that pairs players together. When a player starts seaching for a game,
+they send a JOIN packet to the server which registers their request and adds it to a queue. Then when another player does the same it looks to see if a pair can be made. If it can, one player is instructed to start a host session.
+Once the host has a join code it gets sent back to the server, which then forwards it onto the client, instructing them to join it. At this point the server gets out of the way and the game can start as normal.
+This wasn't the first solution I tried as I originally attempted to create my own UDP relay server, however no matter what I tried the game instances would just not connect. I used Wireshark and saw Netcode sending SMB
+packets, so there is clearly much more going on than just a simple UDP connection.</a></p>
+<p style="color:white;">I didn't intend to publically release the matchmaking server, however if there is interest in something like this I would be happy to share it.</p>
+
+<p style="color:white;">One of my largest (completed) projects is <a href="https://triphzrd.itch.io/starwarp">StarWarp</a></p>
+<img src="./StarWarp.PNG" alt="WinWeb entry point" style="float:right;width:450px;height:250;"></img>
+<p style="color:white;">I was inspired to make StarWarp after playing StarGate for the Atari 2600. I really enjoyed it's simple yet satisfying gameplay and sought to create my own imitation. StarWarp is another Unity project and includes</p>
+<ul>
+  <li style="color:white;">Text-based dialogue</li>
+  <li style="color:white;">Endless scrolling</li>
+  <li style="color:white;">Boss enemies</li>
+  <li style="color:white;">Controller support</li>
+  <li style="color:white;">Experimental touch/mobile support</li>
+</ul> 
+<p style="color:white;">I designed the game to be expandable, so if I ever wish to add more levels or enemies I can do so using ScriptableObjects, and perhaps if it ever gets a following I will do so.</a></p>
 
 </body>
 </html> 
