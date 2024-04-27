@@ -1,7 +1,8 @@
 # WinWeb
 Simple HTTP server using Winsock
 
-Lightweight and fast\n
+Lightweight and fast
+
 Features:
  - Supports HTTP 1.1
  - Threaded connections for multiple clients
