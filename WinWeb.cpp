@@ -14,4 +14,6 @@ int main()
 	{
 		std::this_thread::sleep_for(std::chrono::microseconds(10));
 	}
+
+	delete newServer;
 }
