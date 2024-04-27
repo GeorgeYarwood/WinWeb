@@ -192,7 +192,7 @@ void Server::ListenLoop()
 
 	while (servState == State::RUNNING)
 	{
-		if (Readable(&servSocket))
+		if (connections.size() < MAX_CONNECTIONS && Readable(&servSocket))
 		{
 			acceptSocket = accept(servSocket, (SOCKADDR*)&acceptInfo, &acceptSize);
 

@@ -21,6 +21,8 @@ enum State
 	SHUTDOWN
 };
 
+//TODO expose this and the port we run on in a config file
+#define MAX_CONNECTIONS 100
 
 class Server
 {
