@@ -2,10 +2,10 @@
 Simple HTTP server using Winsock
 
 Lightweight and fast
-
-Supports HTTP 1.1
-Threaded connections for multiple clients
-Common MIME types
+Features:
+ - Supports HTTP 1.1
+ - Threaded connections for multiple clients
+ - Common MIME types
 
 Can be used to host a website or for simple content delivery accross the network.
 
