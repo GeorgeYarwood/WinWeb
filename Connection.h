@@ -4,15 +4,17 @@
 #include <functional>
 #include <ws2tcpip.h>
 #include "Common.h"
-#define PACKET_SIZE 200
-#define MAX_RETRIES 10
+
+#define MAX_KEEP_ALIVE_REQS 1000
+#define KEEP_ALIVE_TIMEOUT 5
+#define TO_SECONDS 1000000
+#define MAX_PARAMS 20
 #define MAX_FILE_SIZE 99999999999999999
-#define PACKET_SIZE 200
+#define MAX_PACKET_SIZE 2000
 #define SERVER_NAME "WinWeb"
 
 #define HTTP_VER "HTTP/1.1"
 #define START_YEAR 1900
-#define MAX_RETRIES 10
 enum ResponseCodes
 {
 	ACCEPTED = 202,
@@ -32,8 +34,11 @@ public:
 	~Connection();
 	char ip[INET_ADDRSTRLEN];
 	bool pendingDelete = false;
+	SOCKET socket;
 private:
+	std::chrono::steady_clock::time_point lastRecv;
 	bool connected = true;
+	bool keepAlive = false;
 	void RunConnection();
 	void OnDisconnect();
 	bool RecvFromSocket(char* buf);
@@ -48,6 +53,5 @@ private:
 	std::function<bool(SOCKET*)> Readable;
 	std::function<bool(SOCKET*)> Writable;
 	sockaddr_in Info;
-	SOCKET socket;
 };
 

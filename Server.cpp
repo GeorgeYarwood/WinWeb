@@ -223,8 +223,12 @@ void Server::CleanupConnections()
 	{
 		if (connections[i]->pendingDelete)
 		{
+			char logBuf[200];
+			sprintf_s(logBuf, "Closing connection from %s", connections[i]->ip);
+
 			delete connections[i];
 			connections.erase(connections.begin() + i);
+			PrintToLog(logBuf);
 			i = 0;
 		}
 	}
