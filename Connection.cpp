@@ -369,13 +369,16 @@ void Connection::SendBuffer(char* buf, SOCKET* dest, int size)
 	int sentBytes = 0;
 	if (Writable(dest))
 	{
-		int thisSent = send(*dest, buf, sendAmount, 0);
-		if (thisSent == 0 || thisSent == SOCKET_ERROR)
+		while (sentBytes < sendAmount) 
 		{
-			return;
-		}
+			int thisSent = send(*dest, buf, sendAmount, 0);
+			if (thisSent == 0 || thisSent == SOCKET_ERROR)
+			{
+				return;
+			}
 
-		sentBytes += thisSent;
+			sentBytes += thisSent;
+		}
 	}
 }
 
