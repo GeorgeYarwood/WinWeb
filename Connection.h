@@ -10,7 +10,7 @@
 #define TO_SECONDS 1000000
 #define MAX_PARAMS 20
 #define MAX_FILE_SIZE 99999999999999999
-#define MAX_PACKET_SIZE 2000
+#define MAX_PACKET_SIZE 65535 //Max TCP packet size 
 #define SERVER_NAME "WinWeb"
 
 #define HTTP_VER "HTTP/1.1"
