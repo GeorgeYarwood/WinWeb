@@ -6,7 +6,7 @@
 int main()
 {
 	Server* newServer = new Server();
-	newServer->Init("ANY", 80);
+	newServer->Init("ANY", 4000);
 
 	std::cout << "WinWeb " << SERVER_MAJOR << "." << SERVER_MINOR << "a, listening for connections..." << std::endl;
 
