@@ -35,10 +35,11 @@ private:
 	bool Readable(SOCKET* socket);
 	bool Writable(SOCKET* socket);
 	void SetNonBlocking(SOCKET* socket);
+	static BOOL ConsoleHandler(DWORD ctrlType);
 	std::thread listenThread;
 	std::function<bool(SOCKET*)> readableFunc;
 	std::function<bool(SOCKET*)> writableFunc;
-
+	static Server* instance;
 public:
 	Server();
 	~Server();

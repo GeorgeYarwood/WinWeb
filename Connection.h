@@ -39,6 +39,7 @@ private:
 	std::chrono::steady_clock::time_point lastRecv;
 	bool connected = true;
 	bool keepAlive = false;
+	char* recvBuf;
 	void RunConnection();
 	void OnDisconnect();
 	bool RecvFromSocket(char* buf);

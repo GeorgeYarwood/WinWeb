@@ -10,6 +10,7 @@
 
 Server::Server()
 {
+	instance = this;
 }
 
 Server::~Server()
@@ -18,8 +19,12 @@ Server::~Server()
 
 std::vector<Connection*> connections;
 
+Server* Server::instance = NULL;
+
 void Server::Init(const char* ip, int port)
 {
+	SetConsoleCtrlHandler(ConsoleHandler, TRUE);
+
 	servState = State::STARTUP;
 
 	WSAData data;
@@ -75,12 +80,6 @@ void Server::Init(const char* ip, int port)
 		return;
 	}
 
-	/*recvFunc = [this](SOCKET* sckt, char* data)
-		{
-			ProcessRequest(sckt, data);
-		};*/
-
-
 	readableFunc = [this](SOCKET* sckt)
 		{
 			return Readable(sckt);
@@ -119,16 +118,16 @@ void Server::ShutdownInternal(ShutdownReason err)
 	switch (err)
 	{
 	case DLL_ERR:
-		PrintToLog("Failed loading DLL");
+		PrintToLog("ERROR-> Failed loading DLL <-ERROR");
 		break;
 	case SOCKET_CREATE_ERR:
-		PrintToLog("Failed to create socket");
+		PrintToLog("ERROR-> Failed to create socket <-ERROR");
 		break;
 	case SOCKET_BIND_ERR:
-		PrintToLog("Failed binding socket");
+		PrintToLog("ERROR-> Failed binding socket <-ERROR");
 		break;
 	case SOCKET_LISTEN_ERR:
-		PrintToLog("Failed listening on socket");
+		PrintToLog("ERROR-> Failed listening on socket <-ERROR");
 		break;
 	case NONE:
 		break;
@@ -213,8 +212,6 @@ void Server::ListenLoop()
 		CleanupConnections();
 		std::this_thread::sleep_for(std::chrono::microseconds(500));
 	}
-
-	ShutdownInternal(ShutdownReason::NONE);
 }
 
 void Server::CleanupConnections()
@@ -232,5 +229,16 @@ void Server::CleanupConnections()
 			i = 0;
 		}
 	}
+}
+
+BOOL Server::ConsoleHandler(DWORD ctrlType)
+{
+	if (instance) 
+	{
+		instance->ShutdownInternal(ShutdownReason::NONE);
+
+		return TRUE;
+	}
+	return FALSE;
 }
 

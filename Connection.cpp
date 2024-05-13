@@ -22,47 +22,57 @@ Connection::~Connection()
 
 void Connection::RunConnection()
 {
-	char recvBuf[MAX_PACKET_SIZE];
-
-	while (connected)
+	recvBuf = (char*)malloc(MAX_PACKET_SIZE);
+	if (recvBuf)
 	{
-		memset(&recvBuf[0], 0, MAX_PACKET_SIZE);
-
-		if (!RecvFromSocket(recvBuf))
+		while (connected)
 		{
-			bool kill = true;
-			if (keepAlive)
+			memset(&recvBuf[0], 0, MAX_PACKET_SIZE);
+
+			if (!RecvFromSocket(recvBuf))
 			{
-				auto currTime = std::chrono::steady_clock::now();
-				auto timeDiff = std::chrono::duration_cast<std::chrono::microseconds>(currTime - lastRecv).count() / TO_SECONDS;
-				if (timeDiff < KEEP_ALIVE_TIMEOUT)
+				bool kill = true;
+				if (keepAlive)
 				{
-					kill = false;
+					auto currTime = std::chrono::steady_clock::now();
+					auto timeDiff = std::chrono::duration_cast<std::chrono::microseconds>(currTime - lastRecv).count() / TO_SECONDS;
+					if (timeDiff < KEEP_ALIVE_TIMEOUT)
+					{
+						kill = false;
+					}
+				}
+
+				if (kill)
+				{
+					break;
 				}
 			}
-
-			if (kill)
+			else
 			{
-				OnDisconnect();
-				return;
+				ProcessRequest(&socket, recvBuf);
+				if (keepAlive)
+				{
+					lastRecv = std::chrono::steady_clock::now();
+				}
 			}
+			std::this_thread::sleep_for(std::chrono::microseconds(500));
 		}
-		else
-		{
-			ProcessRequest(&socket, recvBuf);
-			if (keepAlive)
-			{
-				lastRecv = std::chrono::steady_clock::now();
-			}
-		}
-		std::this_thread::sleep_for(std::chrono::microseconds(500));
 	}
+
+
+	OnDisconnect();
 }
 
 void Connection::OnDisconnect()
 {
 	connected = false;
 	std::this_thread::sleep_for(std::chrono::microseconds(50000));
+
+	if (recvBuf)
+	{
+		free(recvBuf);
+	}
+
 	if (socket != INVALID_SOCKET)
 	{
 		closesocket(socket);
@@ -112,9 +122,8 @@ void Connection::CopyRange(char* start, char* end, char* buf, int size)
 
 void Connection::ProcessRequest(SOCKET* socket, char* data)
 {
-	if (!Writable(socket) || data == nullptr)
+	if (!Writable(socket) || !data)
 	{
-		closesocket(*socket);
 		return;
 	}
 
@@ -367,17 +376,28 @@ void Connection::SendBuffer(char* buf, SOCKET* dest, int size)
 	}
 
 	int sentBytes = 0;
+	int retryCount = 0;
+	char* pos = &buf[0];
 	if (Writable(dest))
 	{
-		while (sentBytes < sendAmount) 
+		while (sentBytes < sendAmount)
 		{
-			int thisSent = send(*dest, buf, sendAmount, 0);
-			if (thisSent == 0 || thisSent == SOCKET_ERROR)
+			int thisSent = send(*dest, pos, sendAmount - sentBytes, 0);
+
+			if (thisSent == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)
 			{
-				return;
+				std::cout << WSAGetLastError();
+				break;
+			}
+			else if (thisSent > 0) 
+			{
+				sentBytes += thisSent;
+				//Only seems to happen on Linux, where send will not send all bytes and we must 
+				//manually iterate along the buffer and calculate what remains to be sent
+				pos += thisSent;
 			}
 
-			sentBytes += thisSent;
+			std::this_thread::sleep_for(std::chrono::microseconds(200));
 		}
 	}
 }
