@@ -6,7 +6,7 @@
 int main()
 {
 	Server* newServer = new Server();
-	newServer->Init("ANY", 80);
+	newServer->Init("ANY", 80); //Linux Server is using 4000 (Ignore if you're not me)
 
 	if(newServer->servState != State::SHUTDOWN)
 	{
