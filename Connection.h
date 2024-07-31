@@ -12,6 +12,8 @@
 #define MAX_FILE_SIZE 99999999999999999
 #define MAX_PACKET_SIZE 65535 //Max TCP packet size 
 #define SERVER_NAME "WinWeb"
+#define MAX_FILE_NAME_LEN 200
+
 
 #define HTTP_VER "HTTP/1.1"
 #define START_YEAR 1900

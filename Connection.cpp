@@ -90,6 +90,7 @@ bool Connection::RecvFromSocket(char* buf)
 
 	int recvBytes = 0;
 	int thisRecv = 0;
+
 	while (thisRecv != SOCKET_ERROR)
 	{
 		thisRecv = recv(socket, buf, MAX_PACKET_SIZE, 0);
@@ -113,10 +114,13 @@ bool Connection::RecvFromSocket(char* buf)
 void Connection::CopyRange(char* start, char* end, char* buf, int size)
 {
 	memset(buf, 0, size);
-	while (start != end)
+	int written = 0;
+	while (start != end && written < size)
 	{
 		*buf = *start;
 		++buf; ++start;
+
+		written++;
 	}
 }
 
@@ -317,7 +321,12 @@ void Connection::GetHeader(ResponseCodes code, char* buf, int len, const char* l
 bool Connection::GetFile(char* name, char* ext, char*& retBuf, int& len)
 {
 	//Finds file in the current directory, dynamically allocates a buffer and then returns true when completed sucessfully
-	char nameBuf[200];
+	if (strnlen_s(name, MAX_FILE_NAME_LEN) + strnlen_s(ext, MAX_FILE_NAME_LEN) > MAX_FILE_NAME_LEN)
+	{
+		return false;
+	}
+
+	char nameBuf[MAX_FILE_NAME_LEN];
 	sprintf_s(nameBuf, ".\\%s%s\0", name, ext);
 
 	char* it = &nameBuf[0];
