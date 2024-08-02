@@ -124,6 +124,20 @@ void Connection::CopyRange(char* start, char* end, char* buf, int size)
 	}
 }
 
+int Connection::GetStrLen(char* start, char* end)
+{
+	int len = 0;
+	char* it = start;
+	while (it != end && it && end)
+	{
+		++it;
+
+		len++;
+	}
+
+	return len;
+}
+
 void Connection::ProcessRequest(SOCKET* socket, char* data)
 {
 	if (!Writable(socket) || !data)
@@ -131,10 +145,7 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 		return;
 	}
 
-	char headerBuf[300];
-
-	GetHeader(ResponseCodes::PROCESSING, headerBuf, 0);
-	SendBuffer(headerBuf, socket);
+	char headerBuf[MAX_HEADER_BUF_SIZE];
 
 	//Get a ptr to start of each parameter
 	char* params[MAX_PARAMS];
@@ -158,6 +169,8 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 		++index;
 	}
 
+	char* userAgent = nullptr;
+
 	//Need to get the connection type first
 	for (int i = 0; i < index; i++)
 	{
@@ -177,7 +190,32 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 				}
 			}
 		}
+		else if (!strncmp(params[i], "User-Agent", 10))
+		{
+			//This should be sent back to the client
+			char* start = params[i] + 11;
+			char* end = strchr(start, '\r\n');
+
+			if (!start || !end) 
+			{
+				continue;
+			}
+
+			int allocSize = GetStrLen(start, end) + 1;
+
+			userAgent = (char*)malloc(allocSize);
+			if (userAgent)
+			{
+				CopyRange(start, end, userAgent, allocSize - 1);
+				userAgent[allocSize- 1] = 0;
+			}
+		}
 	}
+
+	//GetHeader(ResponseCodes::PROCESSING, userAgent, headerBuf, 0, "");
+	//SendBuffer(headerBuf, socket);
+
+	bool handled = false;
 
 	for (int i = 0; i < index; i++)
 	{
@@ -186,8 +224,8 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 			char temp = *&data[5];
 			if (isspace(temp)) //No site requested, redirect to index
 			{
-				GetHeader(ResponseCodes::TEMP_REDIRECT, headerBuf, 0, "/index.html");
-				SendBuffer(headerBuf, socket);
+				GetHeader(ResponseCodes::TEMP_REDIRECT, userAgent, headerBuf, 0, "/index.html");
+				handled = SendBuffer(headerBuf, socket);
 			}
 			else
 			{
@@ -209,7 +247,7 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 							char* contentType = GetTypeFromExtension(ext);
 							if (contentType)
 							{
-								GetHeader(ResponseCodes::OK, headerBuf, len, nullptr, contentType);
+								GetHeader(ResponseCodes::OK, userAgent, headerBuf, len, nullptr, contentType);
 
 								int totalSize = 1 + len + strlen(headerBuf);
 								char* resp = (char*)malloc(totalSize);
@@ -220,7 +258,7 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 									memcpy(&resp[0], headerBuf, strlen(headerBuf));
 									memcpy(&resp[strlen(headerBuf)], file, len);
 
-									SendBuffer(resp, socket, totalSize);
+									handled = SendBuffer(resp, socket, totalSize);
 
 									free(resp);
 								}
@@ -230,33 +268,44 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 
 							free(file);
 						}
-						else
+						else 
 						{
-							GetHeader(ResponseCodes::NOT_FOUND, headerBuf, 0);
-							SendBuffer(headerBuf, socket);
+							goto NotFound;
 						}
+					}
+					else
+					{
+					NotFound:
+						GetHeader(ResponseCodes::NOT_FOUND, userAgent, headerBuf, 0, "");
+						handled = SendBuffer(headerBuf, socket);
 					}
 				}
 			}
 		}
-		else if (!strncmp(params[i], "User-Agent", 10))
+		
+		if (handled)
 		{
-			//TODO I think this should be sent back to the client?
-		}
-		else
-		{
-			GetHeader(ResponseCodes::NOT_IMPLEMENTED, headerBuf, 0);
-			SendBuffer(headerBuf, socket);
+			break;
 		}
 	}
+	
+	if(!handled)
+	{
+		GetHeader(ResponseCodes::NOT_IMPLEMENTED, userAgent, headerBuf, 0, "");
+		SendBuffer(headerBuf, socket);
+	}
+
+	free(userAgent);
 }
 
-void Connection::GetHeader(ResponseCodes code, char* buf, int len, const char* loc, char* contentType)
+void Connection::GetHeader(ResponseCodes code, char* userAgent, char* buf, int len, const char* loc, char* contentType)
 {
 	if (!buf)
 	{
 		return;
 	}
+
+	memset(buf, 0, MAX_HEADER_BUF_SIZE);
 
 	bool cleanup = false;
 	char* getContentType = contentType;
@@ -283,34 +332,14 @@ void Connection::GetHeader(ResponseCodes code, char* buf, int len, const char* l
 	char* mon = &timeBuf[4];
 	strncpy_s(monStr, &timeBuf[4], 3);
 
-	//TODO clean this up
-	char tempBuf[300];
-	memset(tempBuf, 0, 300);
-	if (loc)
-	{
-		if (keepAlive)
-		{
-			sprintf_s(buf, 300, "%s %i \r\nConnection:keep-alive\r\nKeep-Alive: timeout=%i, max=%i\r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\nLocation:%s\r\n\r\n", HTTP_VER, code, KEEP_ALIVE_TIMEOUT, MAX_KEEP_ALIVE_REQS, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, getContentType, len, loc);
-		}
-		else
-		{
-			sprintf_s(buf, 300, "%s %i \r\nConnection:close\r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\nLocation:%s\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, getContentType, len, loc);
-		}
-	}
-	else
-	{
-		if (keepAlive)
-		{
-			sprintf_s(buf, 300, "%s %i \r\nConnection:keep-alive\r\nKeep-Alive: timeout=%i, max=%i\r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\n\r\n", HTTP_VER, code, KEEP_ALIVE_TIMEOUT, MAX_KEEP_ALIVE_REQS, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, getContentType, len);
-		}
-		else
-		{
-			sprintf_s(buf, 300, "%s %i \r\nConnection:close\r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\n\r\n", HTTP_VER, code, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, getContentType, len);
-		}
-	}
+	char keepAliveBuf[200];
+	sprintf(keepAliveBuf, "keep-alive\r\nKeep-Alive: timeout=%i, max=%i", KEEP_ALIVE_TIMEOUT, MAX_KEEP_ALIVE_REQS);
+	const char* closeStr = "close";
 
-	tempBuf[strlen(tempBuf)] = 0;
-	memcpy(buf, tempBuf, strlen(tempBuf));
+	sprintf_s(buf, MAX_HEADER_BUF_SIZE, "%s %i \r\nConnection:%s\r\nServer:%s/%i.%i\r\nDate:%s, %i %s %i\r\nContent-Type:%s\r\nContent-Length:%i\r\nLocation:%s\r\nUser-Agent:%s\r\n\r\n", HTTP_VER, code,
+		keepAlive ? keepAliveBuf : closeStr, SERVER_NAME, SERVER_MAJOR, SERVER_MINOR, dayStr, lTm.tm_mday, monStr, START_YEAR + lTm.tm_year, getContentType, len, loc, userAgent);
+		
+	buf[strlen(buf)] = 0;
 
 	if (cleanup)
 	{
@@ -370,11 +399,11 @@ bool Connection::GetFile(char* name, char* ext, char*& retBuf, int& len)
 	return true;
 }
 
-void Connection::SendBuffer(char* buf, SOCKET* dest, int size)
+bool Connection::SendBuffer(char* buf, SOCKET* dest, int size)
 {
 	if (!buf)
 	{
-		return;
+		return false;
 	}
 
 	int sendAmount = size;
@@ -409,6 +438,8 @@ void Connection::SendBuffer(char* buf, SOCKET* dest, int size)
 			std::this_thread::sleep_for(std::chrono::microseconds(200));
 		}
 	}
+
+	return true;
 }
 
 char* Connection::GetTypeFromExtension(char* ext)

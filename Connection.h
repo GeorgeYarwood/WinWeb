@@ -5,6 +5,7 @@
 #include <ws2tcpip.h>
 #include "Common.h"
 
+#define MAX_HEADER_BUF_SIZE 500
 #define MAX_KEEP_ALIVE_REQS 1000
 #define KEEP_ALIVE_TIMEOUT 5
 #define TO_SECONDS 1000000
@@ -47,9 +48,10 @@ private:
 	bool RecvFromSocket(char* buf);
 	void CopyRange(char* start, char* end, char* buf, int size);
 	void ProcessRequest(SOCKET* socket, char* data);
-	void GetHeader(ResponseCodes code, char* buf, int len, const char* loc = nullptr, char* contentType = nullptr);
+	void GetHeader(ResponseCodes code, char* userAgent, char* buf, int len, const char* loc, char* contentType = nullptr);
+	int GetStrLen(char* start, char* end);
 	bool GetFile(char* name, char* ext, char*& retBuf, int& len);
-	void SendBuffer(char* buf, SOCKET* dest, int size = -1);
+	bool SendBuffer(char* buf, SOCKET* dest, int size = -1);
 	char* GetTypeFromExtension(char* ext);
 	std::thread conThread;
 	std::function<void(SOCKET*, char*)> OnRecv;
