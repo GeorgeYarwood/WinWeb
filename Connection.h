@@ -11,7 +11,9 @@
 #define TO_SECONDS 1000000
 #define MAX_PARAMS 20
 #define MAX_FILE_SIZE 99999999999999999
-#define MAX_PACKET_SIZE 65535 //Max TCP packet size 
+#define MAX_PACKET_SIZE 65535 //Max TCP packet size
+#define MAX_DIR_TABLE_SIZE 8000
+#define MAX_DIR_BUF_SIZE MAX_DIR_TABLE_SIZE + (MAX_PATH * 2)
 #define SERVER_NAME "WinWeb"
 #define MAX_FILE_NAME_LEN 200
 
@@ -48,7 +50,9 @@ private:
 	bool RecvFromSocket(char* buf);
 	void CopyRange(char* start, char* end, char* buf, int size);
 	void ProcessRequest(SOCKET* socket, char* data);
+	char* AppendDataToHeader(char* headerBuf, char* data, int dataLen, int& totalSize);
 	void GetHeader(ResponseCodes code, char* userAgent, char* buf, int len, const char* loc, char* contentType = nullptr);
+	bool GetDirectoryListing(char* loc, char*& retBuf);
 	int GetStrLen(char* start, char* end);
 	bool GetFile(char* name, char* ext, char*& retBuf, int& len);
 	bool SendBuffer(char* buf, SOCKET* dest, int size = -1);

@@ -229,14 +229,15 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 			}
 			else
 			{
+				char* httpVer = strchr(&data[5], 'H');
 				char* fileNameEnd = strchr(&data[5], '.');
 				char* fileExt = strchr(fileNameEnd, ' ');
-				if (fileNameEnd)
+				if (fileNameEnd && fileNameEnd < httpVer)
 				{
-					char fileName[150];
-					CopyRange(&data[5], fileNameEnd, fileName, 150);
-					char ext[150];
-					CopyRange(fileNameEnd, fileExt, ext, 150);
+					char fileName[MAX_FILE_NAME_LEN];
+					CopyRange(&data[5], fileNameEnd, fileName, MAX_FILE_NAME_LEN);
+					char ext[MAX_FILE_NAME_LEN];
+					CopyRange(fileNameEnd, fileExt, ext, MAX_FILE_NAME_LEN);
 
 					char* file = nullptr;
 					int len = 0;
@@ -248,18 +249,12 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 							if (contentType)
 							{
 								GetHeader(ResponseCodes::OK, userAgent, headerBuf, len, nullptr, contentType);
-
-								int totalSize = 1 + len + strlen(headerBuf);
-								char* resp = (char*)malloc(totalSize);
+								int totalSize = 0;
+								char* resp = AppendDataToHeader(headerBuf, file, len, totalSize);
+								
 								if (resp)
 								{
-									memset(resp, 0, totalSize);
-
-									memcpy(&resp[0], headerBuf, strlen(headerBuf));
-									memcpy(&resp[strlen(headerBuf)], file, len);
-
 									handled = SendBuffer(resp, socket, totalSize);
-
 									free(resp);
 								}
 
@@ -280,6 +275,31 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 						handled = SendBuffer(headerBuf, socket);
 					}
 				}
+				else
+				{
+					//No file ext, we've requested a directory listing
+					char filePath [MAX_PATH];
+					CopyRange(&data[5], httpVer - 1, filePath, MAX_PATH);
+					char* retBuf = nullptr;
+					if(GetDirectoryListing(filePath, retBuf) && retBuf)
+					{
+						int len = strnlen_s(retBuf, MAX_DIR_BUF_SIZE);
+						char* contentType = GetTypeFromExtension((char*)".html");
+						if (contentType) 
+						{
+							GetHeader(ResponseCodes::OK, userAgent, headerBuf, len, nullptr, contentType);
+							int totalSize = 0;
+							char* resp = AppendDataToHeader(headerBuf, retBuf, len, totalSize);
+							if (resp)
+							{
+								handled = SendBuffer(resp, socket, totalSize);
+								free(resp);
+							}
+
+							free(contentType);
+						}
+					}
+				}
 			}
 		}
 		
@@ -296,6 +316,21 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 	}
 
 	free(userAgent);
+}
+
+char* Connection::AppendDataToHeader(char* headerBuf, char* data, int dataLen, int& totalSize)
+{
+	totalSize = 1 + dataLen + strlen(headerBuf);
+	char* resp = (char*)malloc(totalSize);
+	if (resp)
+	{
+		memset(resp, 0, totalSize);
+
+		memcpy(&resp[0], headerBuf, strlen(headerBuf));
+		memcpy(&resp[strlen(headerBuf)], data, dataLen);
+	}
+
+	return resp;
 }
 
 void Connection::GetHeader(ResponseCodes code, char* userAgent, char* buf, int len, const char* loc, char* contentType)
@@ -345,6 +380,78 @@ void Connection::GetHeader(ResponseCodes code, char* userAgent, char* buf, int l
 	{
 		free(getContentType);
 	}
+}
+
+bool Connection::GetDirectoryListing(char* loc, char*& retBuf)
+{
+	//Get list of all files/folders in this directory
+	//Generate HTML table with hyperlink to each file/folder
+	//Return as response
+
+	for(int i = 0; i < strlen(loc); i++)
+	{
+		if(loc[i] == '%')
+		{
+			memset(&loc[i], ' ', 3);
+			//Shunt up twice to fill gap
+			for (int j = 0; j < 2; j++) 
+			{
+				for (int k = i; k < strlen(loc); k++)
+				{
+					loc[k] = loc[k + 1];
+				}
+			}
+		}
+	}
+
+	char basePath[MAX_PATH];
+	strcpy(basePath, loc);
+
+	strcat(loc, "\\*\0");
+	WIN32_FIND_DATAA data;
+	HANDLE hFind = FindFirstFileA(loc, &data);
+
+	retBuf = (char*)malloc(MAX_DIR_BUF_SIZE);
+
+	if (!retBuf)
+	{
+		return false;
+	}
+
+	char tblBuf[MAX_DIR_TABLE_SIZE];
+	tblBuf[0] = 0;
+
+	if(hFind != INVALID_HANDLE_VALUE)
+	{
+		while(FindNextFileA(hFind, &data) && strlen(tblBuf) < MAX_DIR_TABLE_SIZE)
+		{
+			//bool useParentBuf = false;
+			//char parentBuf[MAX_PATH + 1];
+			//parentBuf[0] = '/';
+			//if (!strcmp(data.cFileName, "\.."))
+			//{
+			//	char* end = strchr(&loc[0], '/');
+			//	
+			//	if(end)
+			//	{
+			//		CopyRange(&loc[0], end, &parentBuf[1], MAX_PATH);
+			//		//useParentBuf = true;
+			//	}
+			//	
+			//}
+			char* name = data.cFileName;
+			name[strlen(name)] = 0;
+			char entryBuf[MAX_PATH * 2];
+			sprintf_s(entryBuf, "<tr><td valign=\"top\">&nbsp;</td><td><a href=\"/%s/%s\">%s/</a></td><td align=\"right\">TODO Info here  </td><td align=\"right\">  - </td><td>&nbsp;</td></tr>", basePath,
+				name, name);
+			strcat(tblBuf, entryBuf);
+		}
+
+		FindClose(hFind);
+	}
+
+	sprintf_s(retBuf, MAX_DIR_BUF_SIZE, "<!DOCTYPE HTML><html><head><title>Index of %s</title><head><body><h1>Index of %s</h1><table>%s</table></body></html>", basePath, basePath, tblBuf);
+	return true;
 }
 
 bool Connection::GetFile(char* name, char* ext, char*& retBuf, int& len)
