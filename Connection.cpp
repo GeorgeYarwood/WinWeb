@@ -295,9 +295,10 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 								handled = SendBuffer(resp, socket, totalSize);
 								free(resp);
 							}
-							free(retBuf);
 							free(contentType);
 						}
+
+						free(retBuf);
 					}
 				}
 			}
@@ -388,6 +389,11 @@ bool Connection::GetDirectoryListing(char* loc, char*& retBuf)
 	//Generate HTML table with hyperlink to each file/folder
 	//Return as response
 
+	if (strlen(loc) > MAX_PATH)
+	{
+		return false;
+	}
+
 	for (int i = 0; i < strlen(loc); i++)
 	{
 		if (loc[i] == '%')
@@ -452,6 +458,11 @@ bool Connection::GetDirectoryListing(char* loc, char*& retBuf)
 					CopyRange(&basePath[0], lstGood, parentPath, MAX_PATH);
 					isParentDir = true;
 				}
+				else if (!lst) 
+				{
+					isParentDir = true;
+					memset(parentPath, 0, 200);
+				}
 			}
 
 			if(basePath[strlen(basePath) - 1] != '/')
@@ -464,11 +475,29 @@ bool Connection::GetDirectoryListing(char* loc, char*& retBuf)
 			FileTimeToSystemTime(&time, &sysTime);
 
 			char fileInfo[200];
-			sprintf_s(fileInfo, "%u-%u-%u %u:%u", sysTime.wYear, sysTime.wMonth, sysTime.wDay, sysTime.wHour, sysTime.wMinute);
+
+			char month[10];
+			char day[10];
+			char hour[10];
+			char minute[10];
+
+			GetConsistentString(month, sysTime.wMonth);
+			GetConsistentString(day, sysTime.wDay);
+			GetConsistentString(hour, sysTime.wHour);
+			GetConsistentString(minute, sysTime.wMinute);
+
+			if (!isParentDir) 
+			{
+				sprintf_s(fileInfo, "%u-%s-%s %s:%s", sysTime.wYear, month, day, hour, minute);
+			}
+			else 
+			{
+				memset(fileInfo, 0, 200);
+			}
 
 			char entryBuf[400 + (MAX_PATH * 2)];
 			sprintf_s(entryBuf, "<tr><td valign=\"top\">&nbsp;</td><td><a href=\"/%s%s\">%s</a></td><td align=\"right\">%s  </td><td align=\"right\">  </td><td>&nbsp;</td></tr>\n", isParentDir ? parentPath : basePath,
-				isParentDir ? "" : data.cFileName, data.cFileName, fileInfo);
+				isParentDir ? "" : data.cFileName, isParentDir ? "Parent directory" : data.cFileName, fileInfo);
 			strcat(tblBuf, entryBuf);
 		}
 
@@ -477,6 +506,18 @@ bool Connection::GetDirectoryListing(char* loc, char*& retBuf)
 
 	sprintf_s(retBuf, MAX_DIR_BUF_SIZE, "<!DOCTYPE HTML - WinWeb auto-generated directory listing>\n<html>\n<head>\n<title>Index of %s</title>\n<head>\n<body>\n<h1>Index of %s</h1>\n<table>%s</table>\n</body>\n</html>", basePath, basePath, tblBuf);
 	return true;
+}
+
+void Connection::GetConsistentString(char* Buf, int Val)
+{
+	if (Val < 10)
+	{
+		sprintf(Buf, "0%i", Val);
+	}
+	else
+	{
+		sprintf(Buf, "%i", Val);
+	}
 }
 
 bool Connection::GetFile(char* name, char* ext, char*& retBuf, int& len)

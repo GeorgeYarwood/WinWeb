@@ -1,3 +1,3 @@
 #pragma once
-#define SERVER_MAJOR 0
-#define SERVER_MINOR 9
+#define SERVER_MAJOR 1
+#define SERVER_MINOR 0

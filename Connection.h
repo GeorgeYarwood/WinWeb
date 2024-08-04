@@ -53,6 +53,7 @@ private:
 	char* AppendDataToHeader(char* headerBuf, char* data, int dataLen, int& totalSize);
 	void GetHeader(ResponseCodes code, char* userAgent, char* buf, int len, const char* loc, char* contentType = nullptr);
 	bool GetDirectoryListing(char* loc, char*& retBuf);
+	void GetConsistentString(char* Buf, int Val);
 	int GetStrLen(char* start, char* end);
 	bool GetFile(char* name, char* ext, char*& retBuf, int& len);
 	bool SendBuffer(char* buf, SOCKET* dest, int size = -1);
