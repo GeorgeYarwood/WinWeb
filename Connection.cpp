@@ -295,7 +295,7 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 								handled = SendBuffer(resp, socket, totalSize);
 								free(resp);
 							}
-
+							free(retBuf);
 							free(contentType);
 						}
 					}
