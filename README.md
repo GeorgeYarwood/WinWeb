@@ -8,6 +8,7 @@ Features:
  - Threaded connections for multiple clients
  - Keep-alive and single connection modes
  - Common MIME types
+ - Directory listing
 
 Can be used to host a website or for simple content delivery accross the network.
 
