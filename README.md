@@ -17,7 +17,9 @@ E.g.
 - Place files to share in root directory
 - Run WinWeb
 - Connect to host on clients #HOSTIP/FILENAME.EXT
+
 OR
+
 - Place files to share in subdirectory
 - Run WinWb
 - Connect to host on clients #HOSTIP/DIRECTORYNAME/
