@@ -124,7 +124,7 @@ void Server::InputLoop()
 	DWORD consoleMode = 0;
 	GetConsoleMode(inputHandle, &consoleMode);
 	SetConsoleMode(inputHandle, consoleMode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
-	std::cout << ">>";
+	std::cout << ">> ";
 	while (servState != State::SHUTDOWN)
 	{
 		//Poll user input and push to buffer
@@ -294,7 +294,7 @@ void Server::RedrawInputPrompt()
 	COORD inputPos = SetConsoleCursor();
 
 	std::cout << "\r>> " << inputBuffer << "                                       "; // clear line end
-	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), { static_cast<SHORT>(2 + inputBuffer.size()), inputPos.Y });
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), { static_cast<SHORT>(3 + inputBuffer.size()), inputPos.Y });
 }
 
 void Server::AppendChar(char* newChar)
