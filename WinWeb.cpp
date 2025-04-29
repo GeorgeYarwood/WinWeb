@@ -3,11 +3,11 @@
 #include <chrono>
 #include "Common.h"
 
-#define PORT 80
+#define PORT 80 //Linux Server is using 4000 (Ignore if you're not me)
 int main()
 {
 	Server* newServer = new Server();
-	newServer->Init("ANY", PORT); //Linux Server is using 4000 (Ignore if you're not me)
+	newServer->Init("ANY", PORT); 
 
 	if(newServer->servState != State::SHUTDOWN)
 	{

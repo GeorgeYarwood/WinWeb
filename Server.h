@@ -37,6 +37,8 @@ private:
 	SOCKET servSocket = INVALID_SOCKET;
 	void PrintToLog(const char* msg, bool ShouldLock = true);
 	void RedrawInputPrompt();
+	void AppendChar(char* newChar);
+	void RemoveChar();
 	COORD SetConsoleCursor();
 	bool Readable(SOCKET* socket);
 	bool Writable(SOCKET* socket);

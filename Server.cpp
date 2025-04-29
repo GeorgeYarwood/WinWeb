@@ -178,24 +178,30 @@ void Server::InputLoop()
 				}
 				else
 				{
-					PrintToLogNoLock("Unrecognised command");
+					char buf[256];
+					sprintf_s(buf, "Unrecognised command '%s'", inputBuffer.c_str());
+
+					PrintToLogNoLock(buf);
 				}
 				
 				inputBuffer.clear();
+				RedrawInputPrompt();
 			}
 			else if (c == '\b') //Backspace
 			{
 				if (!inputBuffer.empty())
 				{
 					inputBuffer.pop_back();
+					RemoveChar();
 				}
 			}
 			else
 			{
 				inputBuffer += c;
+				AppendChar((char*) &inputBuffer.c_str()[inputBuffer.size() - 1]);
 			}
 
-			RedrawInputPrompt();
+			//RedrawInputPrompt();
 			inputMutex.unlock();
 		}
 
@@ -274,7 +280,7 @@ void Server::PrintToLog(const char* msg, bool ShouldLock)
 	//COORD logPos = { 0, static_cast<SHORT>(csbi.srWindow.Bottom - 1) };
 	//SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), logPos);
 
-	std::cout << "\r" << msg << " \033[K" <<  std::endl;
+	std::cout << "\r" << msg << "                                       " <<  std::endl;
 	RedrawInputPrompt();
 
 	if (ShouldLock)
@@ -287,17 +293,51 @@ void Server::RedrawInputPrompt()
 {
 	COORD inputPos = SetConsoleCursor();
 
-	std::cout << "\r>> " << inputBuffer << " \033[K"; // clear line end
+	std::cout << "\r>> " << inputBuffer << "                                       "; // clear line end
 	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), { static_cast<SHORT>(2 + inputBuffer.size()), inputPos.Y });
+}
+
+void Server::AppendChar(char* newChar)
+{
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(handle, &csbi);
+	COORD cursorPos = csbi.dwCursorPosition;
+	cursorPos.X += 1;
+	WriteConsoleA(handle, newChar, 1, NULL, NULL);
+	//SetConsoleCursorPosition(handle, cursorPos);
+}
+
+void Server::RemoveChar()
+{
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(handle, &csbi);
+
+	COORD cursorPos = csbi.dwCursorPosition;
+	cursorPos.X -= 1;
+	SetConsoleCursorPosition(handle, cursorPos);
+
+	char buf[1];
+	buf[0] = ' ';
+	WriteConsoleA(handle, &buf[0], 1, NULL, NULL);
+
+	GetConsoleScreenBufferInfo(handle, &csbi);
+
+	cursorPos = csbi.dwCursorPosition;
+	cursorPos.X -= 1;
+	SetConsoleCursorPosition(handle, cursorPos);
 }
 
 COORD Server::SetConsoleCursor()
 {
-	CONSOLE_SCREEN_BUFFER_INFO csbi;
-	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-	COORD inputPos = { 0, static_cast<SHORT>(csbi.srWindow.Bottom) };
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 
-	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), inputPos);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(handle, &csbi);
+	COORD inputPos = { 0, csbi.srWindow.Bottom };
+
+	SetConsoleCursorPosition(handle, inputPos);
 	return inputPos;
 }
 
