@@ -3,14 +3,15 @@
 #include <chrono>
 #include "Common.h"
 
+#define PORT 80
 int main()
 {
 	Server* newServer = new Server();
-	newServer->Init("ANY", 4000); //Linux Server is using 4000 (Ignore if you're not me)
+	newServer->Init("ANY", PORT); //Linux Server is using 4000 (Ignore if you're not me)
 
 	if(newServer->servState != State::SHUTDOWN)
 	{
-		std::cout << "WinWeb " << SERVER_MAJOR << "." << SERVER_MINOR << "a, listening for connections..." << std::endl;
+		std::cout << "WinWeb " << SERVER_MAJOR << "." << SERVER_MINOR << "a, listening for connections on port " << PORT <<  "..." << std::endl;
 
 		while (newServer->servState != State::SHUTDOWN)
 		{
