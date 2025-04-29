@@ -4,6 +4,7 @@
 #include <functional>
 #include <ws2tcpip.h>
 #include "Common.h"
+#include <mutex>
 
 #define MAX_HEADER_BUF_SIZE 500
 #define MAX_KEEP_ALIVE_REQS 1000
@@ -35,18 +36,20 @@ enum ResponseCodes
 class Connection
 {
 public:
-	Connection(SOCKET sckt, sockaddr_in info, std::function<bool(SOCKET*)> readable, std::function<bool(SOCKET*)> writable);
+	Connection(SOCKET sckt, sockaddr_in info, std::function<bool(SOCKET*)> readable, std::function<bool(SOCKET*)> writable, std::function<void(const char*)> printFunc);
 	~Connection();
 	char ip[INET_ADDRSTRLEN];
 	bool pendingDelete = false;
 	SOCKET socket;
+	std::mutex tickMutex;
+	void OnDisconnect();
 private:
 	std::chrono::steady_clock::time_point lastRecv;
+	std::chrono::steady_clock::time_point initTime;
 	bool connected = true;
 	bool keepAlive = false;
 	char* recvBuf;
 	void RunConnection();
-	void OnDisconnect();
 	bool RecvFromSocket(char* buf);
 	void CopyRange(char* start, char* end, char* buf, int size);
 	void ProcessRequest(SOCKET* socket, char* data);
@@ -62,6 +65,7 @@ private:
 	std::function<void(SOCKET*, char*)> OnRecv;
 	std::function<bool(SOCKET*)> Readable;
 	std::function<bool(SOCKET*)> Writable;
+	std::function<void(const char*)> PrintFunc;
 	sockaddr_in Info;
 };
 

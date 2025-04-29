@@ -2,15 +2,19 @@
 #include <iostream>
 #include <fstream>
 
-Connection::Connection(SOCKET sckt, sockaddr_in info, std::function<bool(SOCKET*)> readable, std::function<bool(SOCKET*)> writable)
+Connection::Connection(SOCKET sckt, sockaddr_in info, std::function<bool(SOCKET*)> readable, std::function<bool(SOCKET*)> writable, std::function<void(const char*)> printFunc)
 {
 	Readable = readable;
 	Writable = writable;
+	PrintFunc = printFunc;
 	socket = sckt;
 	Info = info;
 
 	inet_ntop(AF_INET, &info.sin_addr, ip, INET_ADDRSTRLEN);
 	lastRecv = std::chrono::steady_clock::now();
+	initTime = std::chrono::steady_clock::now();
+
+	recvBuf = (char*)malloc(MAX_PACKET_SIZE);
 
 	conThread = std::thread([&] {this->RunConnection(); });
 	conThread.detach();
@@ -22,16 +26,22 @@ Connection::~Connection()
 
 void Connection::RunConnection()
 {
-	recvBuf = (char*)malloc(MAX_PACKET_SIZE);
 	if (recvBuf)
 	{
 		while (connected)
 		{
+			tickMutex.lock();
+			if (!connected)
+			{
+				return;
+			}
 			memset(&recvBuf[0], 0, MAX_PACKET_SIZE);
 
 			if (!RecvFromSocket(recvBuf))
 			{
 				bool kill = true;
+
+				
 				if (keepAlive)
 				{
 					auto currTime = std::chrono::steady_clock::now();
@@ -41,9 +51,20 @@ void Connection::RunConnection()
 						kill = false;
 					}
 				}
+				else 
+				{
+					//Give client time to begin sending data
+					auto currTime = std::chrono::steady_clock::now();
+					auto timeDiff = std::chrono::duration_cast<std::chrono::microseconds>(currTime - initTime).count() / TO_SECONDS;
+					if (timeDiff < KEEP_ALIVE_TIMEOUT)
+					{
+						kill = false;
+					}
+				}
 
 				if (kill)
 				{
+					tickMutex.unlock();
 					break;
 				}
 			}
@@ -55,10 +76,11 @@ void Connection::RunConnection()
 					lastRecv = std::chrono::steady_clock::now();
 				}
 			}
+
+			tickMutex.unlock();
 			std::this_thread::sleep_for(std::chrono::microseconds(500));
 		}
 	}
-
 
 	OnDisconnect();
 }
@@ -66,7 +88,6 @@ void Connection::RunConnection()
 void Connection::OnDisconnect()
 {
 	connected = false;
-	std::this_thread::sleep_for(std::chrono::microseconds(50000));
 
 	if (recvBuf)
 	{
@@ -597,14 +618,15 @@ bool Connection::SendBuffer(char* buf, SOCKET* dest, int size)
 
 			if (thisSent == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)
 			{
-				std::cout << WSAGetLastError();
+				char errBuf[250];
+				sprintf_s(errBuf, "SOCKET ERROR: %i", WSAGetLastError());
+				PrintFunc(errBuf);
 				break;
 			}
 			else if (thisSent > 0)
 			{
-				sentBytes += thisSent;
-				//Only seems to happen on Linux, where send will not send all bytes and we must 
-				//manually iterate along the buffer and calculate what remains to be sent
+				sentBytes += thisSent; 
+				//Iterate along the buffer
 				pos += thisSent;
 			}
 

@@ -8,6 +8,9 @@
 #include <vector>
 #include "Connection.h"
 
+std::vector<Connection*> connections;
+Server* Server::instance = NULL;
+
 Server::Server()
 {
 	instance = this;
@@ -15,11 +18,21 @@ Server::Server()
 
 Server::~Server()
 {
+	conMutex.lock();
+	inputMutex.lock();
+
+	if (listenThread.joinable())
+	{
+		listenThread.join();
+	}
+	if (inputThread.joinable())
+	{
+		inputThread.join();
+	}
+
+	conMutex.unlock();
+	inputMutex.unlock();
 }
-
-std::vector<Connection*> connections;
-
-Server* Server::instance = NULL;
 
 void Server::Init(const char* ip, int port)
 {
@@ -91,8 +104,103 @@ void Server::Init(const char* ip, int port)
 			return Writable(sckt);
 		};
 
+	printFunc = [this](const char* msg)
+		{
+			return PrintToLog(msg);
+		};
+
+
+	SetConsoleCursor();
 
 	listenThread = std::thread(&Server::ListenLoop, this);
+	listenThread.detach();
+	inputThread = std::thread(&Server::InputLoop, this);
+	inputThread.detach();
+}
+
+void Server::InputLoop()
+{
+	HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
+	DWORD consoleMode = 0;
+	GetConsoleMode(inputHandle, &consoleMode);
+	SetConsoleMode(inputHandle, consoleMode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
+	std::cout << ">>";
+	while (servState != State::SHUTDOWN)
+	{
+		//Poll user input and push to buffer
+		INPUT_RECORD record;
+		DWORD read;
+		ReadConsoleInput(inputHandle, &record, 1, &read);
+
+		if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown)
+		{
+			char c = record.Event.KeyEvent.uChar.AsciiChar;
+			inputMutex.lock();
+
+			if(c == '\r') //Return key
+			{
+				std::string cpyBuf = inputBuffer;
+				for (int i = 0; i < cpyBuf.length(); i++)
+				{
+					cpyBuf[i] = (char)tolower(cpyBuf[i]);
+				}
+
+				if (cpyBuf == "help")
+				{
+					PrintToLogNoLock("---------------- Help ----------------");
+					PrintToLogNoLock("Shutdown - Gracefully shutdown the server");
+					PrintToLogNoLock("Help - Displays this menu");
+					PrintToLogNoLock("Connections - Displays the current connections");
+				}
+				else if (cpyBuf == "shutdown")
+				{
+					inputMutex.unlock();
+					ShutdownInternal(ShutdownReason::REQUESTED);
+					return;
+				}
+				else if (cpyBuf == "connections")
+				{
+					PrintToLogNoLock("---------------- Connections ----------------");
+
+					conMutex.lock();
+					char buf[256];
+					sprintf_s(buf, "%zu current connections", connections.size());
+					PrintToLogNoLock(buf);
+
+					for (int c = 0; c < connections.size(); c++)
+					{
+						memset(&buf[0], 0, 255);
+						sprintf_s(buf, "%i: %s", c, connections[c]->ip);
+						PrintToLogNoLock(buf);
+					}
+
+					conMutex.unlock();
+				}
+				else
+				{
+					PrintToLogNoLock("Unrecognised command");
+				}
+				
+				inputBuffer.clear();
+			}
+			else if (c == '\b') //Backspace
+			{
+				if (!inputBuffer.empty())
+				{
+					inputBuffer.pop_back();
+				}
+			}
+			else
+			{
+				inputBuffer += c;
+			}
+
+			RedrawInputPrompt();
+			inputMutex.unlock();
+		}
+
+		std::this_thread::sleep_for(std::chrono::microseconds(500));
+	}
 }
 
 void Server::SetNonBlocking(SOCKET* socket)
@@ -117,21 +225,27 @@ void Server::ShutdownInternal(ShutdownReason err)
 
 	switch (err)
 	{
-	case DLL_ERR:
-		PrintToLog("ERROR-> Failed loading DLL <-ERROR");
-		break;
-	case SOCKET_CREATE_ERR:
-		PrintToLog("ERROR-> Failed to create socket <-ERROR");
-		break;
-	case SOCKET_BIND_ERR:
-		PrintToLog("ERROR-> Failed binding socket <-ERROR");
-		break;
-	case SOCKET_LISTEN_ERR:
-		PrintToLog("ERROR-> Failed listening on socket <-ERROR");
-		break;
-	case NONE:
-		break;
+		case DLL_ERR:
+			PrintToLog("ERROR-> Failed loading DLL <-ERROR");
+			break;
+		case SOCKET_CREATE_ERR:
+			PrintToLog("ERROR-> Failed to create socket <-ERROR");
+			break;
+		case SOCKET_BIND_ERR:
+			PrintToLog("ERROR-> Failed binding socket <-ERROR");
+			break;
+		case SOCKET_LISTEN_ERR:
+			PrintToLog("ERROR-> Failed listening on socket <-ERROR");
+			break;
+		case REQUESTED:
+			PrintToLog("WARNING-> Requested shutdown <-WARNING");
+		case NONE:
+			break;
 	}
+
+	conMutex.lock();
+
+	TerminateAllConnections();
 
 	if (servSocket != INVALID_SOCKET)
 	{
@@ -139,11 +253,52 @@ void Server::ShutdownInternal(ShutdownReason err)
 	}
 
 	WSACleanup();
+
+	conMutex.unlock();
 }
 
-void Server::PrintToLog(const char* msg)
+void Server::PrintToLogNoLock(const char* msg)
 {
-	std::cout << msg << std::endl;
+	PrintToLog(msg, false);
+}
+
+void Server::PrintToLog(const char* msg, bool ShouldLock)
+{
+	if (ShouldLock) 
+	{
+		inputMutex.lock();
+	}
+	
+	//CONSOLE_SCREEN_BUFFER_INFO csbi;
+	//GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+	//COORD logPos = { 0, static_cast<SHORT>(csbi.srWindow.Bottom - 1) };
+	//SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), logPos);
+
+	std::cout << "\r" << msg << " \033[K" <<  std::endl;
+	RedrawInputPrompt();
+
+	if (ShouldLock)
+	{
+		inputMutex.unlock();
+	}
+}
+
+void Server::RedrawInputPrompt()
+{
+	COORD inputPos = SetConsoleCursor();
+
+	std::cout << "\r>> " << inputBuffer << " \033[K"; // clear line end
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), { static_cast<SHORT>(2 + inputBuffer.size()), inputPos.Y });
+}
+
+COORD Server::SetConsoleCursor()
+{
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+	COORD inputPos = { 0, static_cast<SHORT>(csbi.srWindow.Bottom) };
+
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), inputPos);
+	return inputPos;
 }
 
 bool Server::Readable(SOCKET* socket)
@@ -191,6 +346,7 @@ void Server::ListenLoop()
 
 	while (servState == State::RUNNING)
 	{
+		conMutex.lock();
 		if (connections.size() < MAX_CONNECTIONS && Readable(&servSocket))
 		{
 			acceptSocket = accept(servSocket, (SOCKADDR*)&acceptInfo, &acceptSize);
@@ -202,7 +358,7 @@ void Server::ListenLoop()
 
 			SetNonBlocking(&acceptSocket);
 
-			Connection* newCon = new Connection(acceptSocket, acceptInfo, readableFunc, writableFunc);
+			Connection* newCon = new Connection(acceptSocket, acceptInfo, readableFunc, writableFunc, printFunc);
 			connections.push_back(newCon);
 			char logBuf[200];
 			sprintf_s(logBuf, "Accepted connection from %s", newCon->ip);
@@ -210,13 +366,42 @@ void Server::ListenLoop()
 		}
 
 		CleanupConnections();
+		conMutex.unlock();
+
 		std::this_thread::sleep_for(std::chrono::microseconds(500));
+	}
+}
+
+void Server::TerminateAllConnections()
+{
+	if (connections.size() == 0)
+	{
+		return;
+	}
+
+	for (int i = connections.size() - 1; i >= 0; i--)
+	{
+		connections[i]->tickMutex.lock();
+		connections[i]->OnDisconnect();
+		connections[i]->tickMutex.unlock();
+
+		char logBuf[200];
+		sprintf_s(logBuf, "Terminated connection from %s for shutdown", connections[i]->ip);
+
+		delete connections[i];
+		connections.erase(connections.begin() + i);
+		PrintToLog(logBuf);
+
 	}
 }
 
 void Server::CleanupConnections()
 {
-	for (int i = 0; i < connections.size(); i++)
+	if (connections.size() == 0)
+	{
+		return;
+	}
+	for (int i = connections.size() - 1; i >= 0; i--)
 	{
 		if (connections[i]->pendingDelete)
 		{
@@ -226,14 +411,13 @@ void Server::CleanupConnections()
 			delete connections[i];
 			connections.erase(connections.begin() + i);
 			PrintToLog(logBuf);
-			i = 0;
 		}
 	}
 }
 
 BOOL Server::ConsoleHandler(DWORD ctrlType)
 {
-	if (instance) 
+	if (instance)
 	{
 		instance->ShutdownInternal(ShutdownReason::NONE);
 
