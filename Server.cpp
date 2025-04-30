@@ -120,11 +120,12 @@ void Server::Init(const char* ip, int port)
 
 void Server::InputLoop()
 {
+	RedrawInputPrompt();
 	HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
 	DWORD consoleMode = 0;
 	GetConsoleMode(inputHandle, &consoleMode);
 	SetConsoleMode(inputHandle, consoleMode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
-	std::cout << ">> ";
+	
 	while (servState != State::SHUTDOWN)
 	{
 		//Poll user input and push to buffer
@@ -151,6 +152,7 @@ void Server::InputLoop()
 					PrintToLogNoLock("Shutdown - Gracefully shutdown the server");
 					PrintToLogNoLock("Help - Displays this menu");
 					PrintToLogNoLock("Connections - Displays the current connections");
+					PrintToLogNoLock("Ver - Displays the current server version");
 				}
 				else if (cpyBuf == "shutdown")
 				{
@@ -173,8 +175,14 @@ void Server::InputLoop()
 						sprintf_s(buf, "%i: %s", c, connections[c]->ip);
 						PrintToLogNoLock(buf);
 					}
-
+					
 					conMutex.unlock();
+				}
+				else if(cpyBuf == "ver")
+				{
+					char buf[200];
+					sprintf_s(buf, "WinWeb v%i.%ia", SERVER_MAJOR, SERVER_MINOR);
+					PrintToLogNoLock(buf);
 				}
 				else
 				{
@@ -274,13 +282,13 @@ void Server::PrintToLog(const char* msg, bool ShouldLock)
 	{
 		inputMutex.lock();
 	}
-	
-	//CONSOLE_SCREEN_BUFFER_INFO csbi;
-	//GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-	//COORD logPos = { 0, static_cast<SHORT>(csbi.srWindow.Bottom - 1) };
-	//SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), logPos);
 
-	std::cout << "\r" << msg << "                                       " <<  std::endl;
+	char msgBuf[512];
+	sprintf_s(msgBuf, "\r%s\033[K\n", msg);
+
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	WriteConsoleA(handle, msgBuf, strlen(msgBuf), NULL, nullptr);
+
 	RedrawInputPrompt();
 
 	if (ShouldLock)
@@ -292,9 +300,11 @@ void Server::PrintToLog(const char* msg, bool ShouldLock)
 void Server::RedrawInputPrompt()
 {
 	COORD inputPos = SetConsoleCursor();
+	char msgBuf[512];
+	sprintf_s(msgBuf, "\r>> %s\033[K", inputBuffer.c_str());
 
-	std::cout << "\r>> " << inputBuffer << "                                       "; // clear line end
-	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), { static_cast<SHORT>(3 + inputBuffer.size()), inputPos.Y });
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	WriteConsoleA(handle, msgBuf, strlen(msgBuf), NULL, nullptr);
 }
 
 void Server::AppendChar(char* newChar)
@@ -305,7 +315,6 @@ void Server::AppendChar(char* newChar)
 	COORD cursorPos = csbi.dwCursorPosition;
 	cursorPos.X += 1;
 	WriteConsoleA(handle, newChar, 1, NULL, NULL);
-	//SetConsoleCursorPosition(handle, cursorPos);
 }
 
 void Server::RemoveChar()
