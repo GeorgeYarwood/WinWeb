@@ -284,10 +284,11 @@ void Server::PrintToLog(const char* msg, bool ShouldLock)
 	}
 
 	char msgBuf[512];
+	memset(msgBuf, 0, 512);
 	sprintf_s(msgBuf, "\r%s\033[K\n", msg);
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	WriteConsoleA(handle, msgBuf, strlen(msgBuf), NULL, nullptr);
+	WriteConsoleA(handle, msgBuf, strnlen_s(msgBuf, 512), NULL, nullptr);
 
 	RedrawInputPrompt();
 
@@ -301,10 +302,11 @@ void Server::RedrawInputPrompt()
 {
 	COORD inputPos = SetConsoleCursor();
 	char msgBuf[512];
+	memset(msgBuf, 0, 512);
 	sprintf_s(msgBuf, "\r>> %s\033[K", inputBuffer.c_str());
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	WriteConsoleA(handle, msgBuf, strlen(msgBuf), NULL, nullptr);
+	WriteConsoleA(handle, msgBuf, strnlen_s(msgBuf, 512), NULL, nullptr);
 }
 
 void Server::AppendChar(char* newChar)
