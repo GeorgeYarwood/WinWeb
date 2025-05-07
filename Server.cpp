@@ -432,6 +432,10 @@ void Server::TerminateAllConnections()
 
 	for (int i = connections.size() - 1; i >= 0; i--)
 	{
+		if (!connections[i])
+		{
+			continue;
+		}
 		connections[i]->tickMutex.lock();
 		connections[i]->OnDisconnect();
 		connections[i]->tickMutex.unlock();
@@ -440,10 +444,10 @@ void Server::TerminateAllConnections()
 		sprintf_s(logBuf, "Terminated connection from %s for shutdown", connections[i]->ip);
 
 		delete connections[i];
-		connections.erase(connections.begin() + i);
 		PrintToLog(logBuf);
-
 	}
+
+	connections.clear();
 }
 
 void Server::CleanupConnections()
@@ -452,18 +456,25 @@ void Server::CleanupConnections()
 	{
 		return;
 	}
+
+	std::vector<Connection*> newConnections;
+
 	for (int i = connections.size() - 1; i >= 0; i--)
 	{
-		if (connections[i]->pendingDelete)
+		if (connections[i] && !connections[i]->pendingDelete)
+		{
+			newConnections.push_back(connections[i]);
+		}
+		else 
 		{
 			char logBuf[200];
 			sprintf_s(logBuf, "Closing connection from %s", connections[i]->ip);
-
 			delete connections[i];
-			connections.erase(connections.begin() + i);
 			PrintToLog(logBuf);
 		}
 	}
+
+	connections = newConnections;
 }
 
 BOOL Server::ConsoleHandler(DWORD ctrlType)
