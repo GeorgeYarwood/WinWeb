@@ -24,7 +24,7 @@ enum State
 };
 
 //TODO expose this and the port we run on in a config file
-#define MAX_CONNECTIONS 100
+#define MAX_CONNECTIONS 1000
 
 class Server
 {
@@ -42,6 +42,7 @@ private:
 	COORD SetConsoleCursor();
 	bool Readable(SOCKET* socket);
 	bool Writable(SOCKET* socket);
+	void DebugLoop();
 	void SetNonBlocking(SOCKET* socket);
 	void InputLoop();
 	static BOOL ConsoleHandler(DWORD ctrlType);

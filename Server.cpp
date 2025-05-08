@@ -380,6 +380,30 @@ bool Server::Writable(SOCKET* socket)
 	return ret != SOCKET_ERROR && ret > 0;
 }
 
+void Server::DebugLoop() 
+{
+	sockaddr_in acceptInfo = { 0 };
+
+	while (servState == State::RUNNING)
+	{
+		conMutex.lock();
+
+		if (connections.size() < MAX_CONNECTIONS)
+		{
+			Connection* newCon = new Connection(INVALID_SOCKET, acceptInfo, readableFunc, writableFunc, printFunc);
+			connections.push_back(newCon);
+			char buf[256];
+			sprintf_s(buf, "Fake connections: %i", connections.size());
+			PrintToLog(buf);
+		}
+		
+		CleanupConnections();
+
+		conMutex.unlock();
+		std::this_thread::sleep_for(std::chrono::microseconds(500));
+	}
+}
+
 void Server::ListenLoop()
 {
 	if (servSocket == INVALID_SOCKET)
@@ -394,6 +418,8 @@ void Server::ListenLoop()
 
 	sockaddr_in acceptInfo;
 	int acceptSize = sizeof(acceptInfo);
+
+	//DebugLoop();
 
 	while (servState == State::RUNNING)
 	{
@@ -465,7 +491,7 @@ void Server::CleanupConnections()
 		{
 			newConnections.push_back(connections[i]);
 		}
-		else 
+		else if(connections[i])
 		{
 			char logBuf[200];
 			sprintf_s(logBuf, "Closing connection from %s", connections[i]->ip);

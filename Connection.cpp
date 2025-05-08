@@ -33,6 +33,7 @@ void Connection::RunConnection()
 			tickMutex.lock();
 			if (!connected)
 			{
+				tickMutex.unlock();
 				return;
 			}
 			memset(&recvBuf[0], 0, MAX_PACKET_SIZE);
