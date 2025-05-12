@@ -48,6 +48,7 @@ private:
 	static BOOL ConsoleHandler(DWORD ctrlType);
 	std::thread listenThread;
 	std::thread inputThread;
+	std::thread cleanupThread;
 	std::function<bool(SOCKET*)> readableFunc;
 	std::function<bool(SOCKET*)> writableFunc;
 	std::function<void(const char*)> printFunc;

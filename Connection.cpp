@@ -95,7 +95,7 @@ void Connection::OnDisconnect()
 		free(recvBuf);
 	}
 
-	if (socket != INVALID_SOCKET)
+	//if (socket != INVALID_SOCKET)
 	{
 		closesocket(socket);
 	}
@@ -234,6 +234,11 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 		}
 	}
 
+	if(!userAgent)
+	{
+		return;
+	}
+
 	//GetHeader(ResponseCodes::PROCESSING, userAgent, headerBuf, 0, "");
 	//SendBuffer(headerBuf, socket);
 
@@ -282,7 +287,10 @@ void Connection::ProcessRequest(SOCKET* socket, char* data)
 
 								free(contentType);
 							}
+						}
 
+						if(file)
+						{
 							free(file);
 						}
 						else

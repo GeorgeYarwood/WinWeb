@@ -3,7 +3,7 @@
 #include <chrono>
 #include "Common.h"
 
-#define PORT 80 //Linux Server is using 4000 (Ignore if you're not me)
+#define PORT 4000 //Linux Server is using 4000 (Ignore if you're not me)
 int main()
 {
 	Server* newServer = new Server();

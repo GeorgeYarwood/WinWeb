@@ -116,6 +116,8 @@ void Server::Init(const char* ip, int port)
 	listenThread.detach();
 	inputThread = std::thread(&Server::InputLoop, this);
 	inputThread.detach();
+	cleanupThread = std::thread(&Server::CleanupConnections, this);
+	cleanupThread.detach();
 }
 
 void Server::InputLoop()
@@ -288,7 +290,7 @@ void Server::PrintToLog(const char* msg, bool ShouldLock)
 	sprintf_s(msgBuf, "\r%s\033[K\n", msg);
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	WriteConsoleA(handle, msgBuf, strnlen_s(msgBuf, 512), NULL, nullptr);
+	WriteConsoleA(handle, msgBuf, strnlen_s(msgBuf, 511), NULL, nullptr);
 
 	RedrawInputPrompt();
 
@@ -306,7 +308,7 @@ void Server::RedrawInputPrompt()
 	sprintf_s(msgBuf, "\r>> %s\033[K", inputBuffer.c_str());
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	WriteConsoleA(handle, msgBuf, strnlen_s(msgBuf, 512), NULL, nullptr);
+	WriteConsoleA(handle, msgBuf, strnlen_s(msgBuf, 511), NULL, nullptr);
 }
 
 void Server::AppendChar(char* newChar)
@@ -423,7 +425,6 @@ void Server::ListenLoop()
 
 	while (servState == State::RUNNING)
 	{
-		conMutex.lock();
 		if (connections.size() < MAX_CONNECTIONS && Readable(&servSocket))
 		{
 			acceptSocket = accept(servSocket, (SOCKADDR*)&acceptInfo, &acceptSize);
@@ -434,16 +435,15 @@ void Server::ListenLoop()
 			}
 
 			SetNonBlocking(&acceptSocket);
+			conMutex.lock();
 
 			Connection* newCon = new Connection(acceptSocket, acceptInfo, readableFunc, writableFunc, printFunc);
 			connections.push_back(newCon);
 			char logBuf[200];
 			sprintf_s(logBuf, "Accepted connection from %s", newCon->ip);
 			PrintToLog(logBuf);
+			conMutex.unlock();
 		}
-
-		CleanupConnections();
-		conMutex.unlock();
 
 		std::this_thread::sleep_for(std::chrono::microseconds(500));
 	}
@@ -456,21 +456,23 @@ void Server::TerminateAllConnections()
 		return;
 	}
 
-	for (int i = connections.size() - 1; i >= 0; i--)
+	for (int i = 0; i < connections.size(); i++)
 	{
 		if (!connections[i])
 		{
 			continue;
 		}
+
 		connections[i]->tickMutex.lock();
 		connections[i]->OnDisconnect();
 		connections[i]->tickMutex.unlock();
 
 		char logBuf[200];
 		sprintf_s(logBuf, "Terminated connection from %s for shutdown", connections[i]->ip);
-
-		delete connections[i];
 		PrintToLog(logBuf);
+
+		Connection* toDel = connections[i];
+		delete toDel;
 	}
 
 	connections.clear();
@@ -478,29 +480,30 @@ void Server::TerminateAllConnections()
 
 void Server::CleanupConnections()
 {
-	if (connections.size() == 0)
+	while (servState != State::SHUTDOWN)
 	{
-		return;
-	}
-
-	std::vector<Connection*> newConnections;
-
-	for (int i = connections.size() - 1; i >= 0; i--)
-	{
-		if (connections[i] && !connections[i]->pendingDelete)
+		if (connections.size() > 0)
 		{
-			newConnections.push_back(connections[i]);
-		}
-		else if(connections[i])
-		{
-			char logBuf[200];
-			sprintf_s(logBuf, "Closing connection from %s", connections[i]->ip);
-			delete connections[i];
-			PrintToLog(logBuf);
+			conMutex.lock();
+
+			for (int i = 0; i < connections.size(); i++)
+			{
+				if (connections[i] != nullptr && connections[i]->pendingDelete)
+				{
+					char logBuf[200];
+					sprintf_s(logBuf, "Closing connection from %s", connections[i]->ip);
+					PrintToLog(logBuf);
+
+					Connection* toDel = connections[i];
+					delete toDel;
+					connections.erase(connections.begin() + i);
+					i = 0;
+				}
+			}
+			conMutex.unlock();
+			std::this_thread::sleep_for(std::chrono::microseconds(500));
 		}
 	}
-
-	connections = newConnections;
 }
 
 BOOL Server::ConsoleHandler(DWORD ctrlType)
